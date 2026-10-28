@@ -25,11 +25,11 @@ class PeerSessionMemoryTest {
         @Override public boolean isClosed(){return closed;}
         @Override public synchronized void close()throws IOException {if(closed)return;closed=true;input.close();output.close();}
     }
-    private static MemorySocket[] sockets()throws IOException {
+    static MemorySocket[] sockets()throws IOException {
         MemorySocket a=new MemorySocket(),b=new MemorySocket();a.output=new PipedOutputStream(b.input);b.output=new PipedOutputStream(a.input);
         return new MemorySocket[]{a,b};
     }
-    private static PeerSession peer(PeerSession.Role role,MemorySocket socket)throws Exception {
+    static PeerSession peer(PeerSession.Role role,MemorySocket socket)throws Exception {
         Constructor<PeerSession> constructor=PeerSession.class.getDeclaredConstructor(PeerSession.Role.class);constructor.setAccessible(true);
         PeerSession peer=constructor.newInstance(role);Method attach=PeerSession.class.getDeclaredMethod("attach",Socket.class);attach.setAccessible(true);
         attach.invoke(peer,socket);return peer;

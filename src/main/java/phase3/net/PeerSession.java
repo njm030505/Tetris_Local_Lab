@@ -30,6 +30,25 @@ public final class PeerSession implements AutoCloseable {
     private boolean localReady,remoteReady;
     private long matchId,revision=1,lastReceiveNanos=System.nanoTime(),lastSequence;
     private String status="",remoteAddress="";
+    public record ChatMessage(Role sender,String text) {}
+    private final java.util.ArrayDeque<ChatMessage> chat=new java.util.ArrayDeque<>();
+    public synchronized java.util.List<ChatMessage> chatHistory(){return java.util.List.copyOf(chat);}
+    public synchronized void sendChat(String text) {
+        if(socket==null||(state!=State.LOBBY&&state!=State.RESULT))
+            throw new IllegalStateException("채팅은 연결된 대기실에서 사용할 수 있습니다.");
+        String message=checkedChat(text);
+        enqueue(WireCodec.CHAT,matchId,out -> out.writeUTF(message));
+        if(state!=State.DISCONNECTED)appendChat(role,message);
+    }
+    private static String checkedChat(String text) {
+        if(text==null||text.length()>500||text.isBlank()||text.codePoints().anyMatch(Character::isISOControl))
+            throw new IllegalArgumentException("메시지는 줄바꿈 없이 1~500자로 입력하세요.");
+        return text.strip();
+    }
+    private void appendChat(Role sender,String text) {
+        if(chat.size()==200)chat.removeFirst();
+        chat.addLast(new ChatMessage(sender,text));
+    }
     private PeerSession(Role role){this.role=role;state=role==Role.HOST?State.LISTENING:State.CONNECTING;}
     private static Thread daemon(Runnable run,String name){Thread t=new Thread(run,name);t.setDaemon(true);return t;}
 
@@ -142,6 +161,14 @@ public final class PeerSession implements AutoCloseable {
         DataInputStream in=WireCodec.input(message.payload());
         switch(message.type()) {
             case WireCodec.HEARTBEAT -> { }
+            case WireCodec.CHAT -> {
+                String text;
+                try{text=checkedChat(in.readUTF());}
+                catch(IllegalArgumentException e){throw new IOException("Invalid chat message",e);}
+                // A lobby message can arrive just after the other peer starts a match.
+                if(state==State.LOBBY||state==State.RESULT)
+                    appendChat(role==Role.HOST?Role.CLIENT:Role.HOST,text);
+            }
             case WireCodec.STATE -> {
                 if(role!=Role.CLIENT)throw new IOException("Client cannot set state");
                 long nextRevision=in.readLong();if(nextRevision<revision||message.matchId()<matchId)throw new IOException("Stale state");

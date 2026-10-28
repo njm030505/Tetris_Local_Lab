@@ -7,8 +7,8 @@ import java.util.*;
 
 /** Versioned, length-delimited binary data only: never Java serialization. */
 final class WireCodec {
-    static final int VERSION=1,MAX_FRAME=32768;
-    static final int STATE=1,READY=2,COMMAND=3,PAUSE=4,SNAPSHOT=5,HEARTBEAT=6;
+    static final int VERSION=2,MAX_FRAME=32768;
+    static final int STATE=1,READY=2,COMMAND=3,PAUSE=4,SNAPSHOT=5,HEARTBEAT=6,CHAT=7;
     record Message(int type,long sequence,long matchId,byte[] payload) {}
     interface Encoder {void write(DataOutputStream out) throws IOException;}
     static byte[] payload(Encoder encoder) throws IOException {
@@ -24,7 +24,7 @@ final class WireCodec {
         int length=in.readInt();if(length<18||length>MAX_FRAME)throw new IOException("Invalid frame length");
         byte[] body=new byte[length];in.readFully(body);DataInputStream data=input(body);
         if(data.readUnsignedByte()!=VERSION)throw new IOException("Unsupported protocol version");
-        int type=data.readUnsignedByte();if(type<STATE||type>HEARTBEAT)throw new IOException("Invalid message type");
+        int type=data.readUnsignedByte();if(type<STATE||type>CHAT)throw new IOException("Invalid message type");
         long sequence=data.readLong(),id=data.readLong();
         if(sequence<1||id<0)throw new IOException("Invalid sequence or match ID");
         return new Message(type,sequence,id,data.readAllBytes());

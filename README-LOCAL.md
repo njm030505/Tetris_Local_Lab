@@ -1,6 +1,6 @@
 # TFSE Phase 3 - standalone local project
 
-This directory has no .git directory. It is an isolated copy of upstream main79bc704 with phase3 additions. Original repository, GitHub and Notion were not modified. AI/CNN/chat/multiplayer challenges are intentionally not implemented; InputAgent is the future extension contract.
+This is a standalone local project based on upstream main79bc704 with phase3 additions. Lobby chat is implemented; computer opponents and multiplayer challenges remain unimplemented. InputAgent is the future computer-player extension contract.
 
 ## Run
 
@@ -10,6 +10,7 @@ The files currently live inside Windows Temp; copy this entire project to a perm
 
 ## Play
 
+- P2P lobby chat: after connecting, type a message and press Enter or Send. Korean/emoji messages are supported, with up to 500 Java UTF-16 code units per single-line message and the latest 200 messages kept for that connection. Chat is available before a match and after results, and is disabled during gameplay. Both PCs must run the updated protocol version 2; old builds cannot connect to it. Restart the game after updating.
 - Single normal and item modes preserve score/leaderboard and existing settings/accessibility.
 - Local versus: choose NORMAL, ITEM or TIMED, shared difficulty, duration10..3600 seconds (default180). P1 A/D/S/W/F; P2 Left/Right/Down/Up/Space. Player-specific controls can be changed and persisted. P pauses the entire match. ESC asks before leaving. Focus loss releases keys.
 - P2P: create server on one PC (default TCP24816); enter displayed IPv4 and port on the other. Host applies mode/difficulty/time. Both press ready. Both boards are displayed. On result select lobby/rematch and both ready again on the same connection. On each PC use the PLAYER1 control profile for your own board.
