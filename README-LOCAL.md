@@ -6,7 +6,17 @@ This is a standalone local project based on upstream main79bc704 with phase3 add
 
 Double-click Run-Tetris.bat. If the runtime package exists, this launches build/TFSE-Phase3-Local/TFSE-Phase3-Local.exe. Keep its app/ and runtime/ directories with the EXE. Otherwise the batch uses Java21 and run-local.ps1. Source projects open as Gradle in IntelliJ; main class phase3.ui.LocalMain.
 
-The files currently live inside Windows Temp; copy this entire project to a permanent directory before cleanup. There is no upload, sync, branch or remote association. Default standalone data is stored next to its JAR in data/. run-local.ps1 explicitly uses this project's data/. All tests use build/test-data, never original settings/scores.
+Repository: https://github.com/njm030505/Tetris_Local_Lab. Default standalone data is stored next to its JAR in data/. run-local.ps1 explicitly uses this project's data/. All tests use build/test-data, never original settings/scores. Player data, IDE settings, temporary files and generated builds are intentionally not versioned.
+
+## On another Windows PC
+
+1. Install JDK 21 and ensure `java`, `javac` and `jar` are on PATH. Confirm with `java -version` and `javac -version`.
+2. Clone this repository (first use), or run `git pull` in an existing clean checkout.
+3. In IntelliJ, open the repository folder as a Gradle project, select JDK 21 for both the project and Gradle JVM, and run `phase3.ui.LocalMain`. IntelliJ generates its own .idea files.
+4. Alternatively, double-click `Run-Tetris.bat`, or run `powershell -NoProfile -ExecutionPolicy Bypass -File .\run-local.ps1` from the repository root. A fresh clone builds and launches the JAR because compiled packages are not in Git.
+5. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\test-local.ps1 -VerifyCoverage -RequireNetwork` to verify the build and real loopback network tests. The bundled tools/lib JARs allow this without downloading test dependencies.
+
+Use `run-local.ps1` after source updates so the latest source is always rebuilt. `Run-Tetris.bat` prefers an existing EXE package, which must be rebuilt/refreshed separately after updating source. The optional `package-local.ps1` creates an EXE with a bundled runtime; its build output stays local.
 
 ## Play
 
