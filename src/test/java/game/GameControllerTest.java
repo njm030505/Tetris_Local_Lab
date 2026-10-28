@@ -1,0 +1,191 @@
+package game;
+
+import java.awt.event.KeyEvent;
+import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
+import javax.swing.JPanel;
+
+import org.junit.jupiter.api.AfterEach;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import app.AppState;
+import app.AppStateManager;
+import blocks.core.Block;
+import blocks.tetromino.OBlock;
+import board.Board;
+import difficulty.Difficulty;
+import java.awt.event.KeyEvent;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import javax.swing.JPanel;
+import menu.settings.AppSettings;
+import menu.settings.KeyAction;
+import score.ScoreManager;
+
+// FR-13 게임 중 종료(ESC로 설정 진입), FR-19 게임 중 설정 변경
+class GameControllerTest {
+    private final JPanel source = new JPanel();
+
+    private GameStateManager manager;
+    private ActionController action;
+    private GameLoop loop;
+    private AppStateManager appState;
+    private ScoreManager scoreManager;
+    private GameController controller;
+
+    private int settingsOpened;
+    private int pauseHandlerCalls;
+    private int exitHandlerCalls;
+    private CountDownLatch exitCalled;
+    private boolean pausedWhileSettingsOpen;
+    private AppState stateWhileSettingsOpen;
+
+    @BeforeEach
+    void setUp() {
+        exitCalled = new CountDownLatch(1);
+        manager = new GameStateManager();
+        scoreManager = new ScoreManager();
+        action = new ActionController(new Board(), new OBlock(), manager, scoreManager,
+                Difficulty.NORMAL, GameMode.NORMAL, 0);
+        loop = new GameLoop(action, manager, scoreManager);
+        appState = new AppStateManager(AppState.PLAYING);
+        controller = new GameController(loop, action, manager, scoreManager, appState,
+                () -> { // 설정 창이 떠 있는 동안의 상태 기록
+                    settingsOpened++;
+                    pausedWhileSettingsOpen = loop.isPaused();
+                    stateWhileSettingsOpen = appState.getCurrentState();
+                },
+                () -> pauseHandlerCalls++,
+                () -> {
+                    exitHandlerCalls++;
+                    exitCalled.countDown();
+                });
+    }
+
+    @AfterEach
+    void tearDown() {
+        controller.shutdown();
+        action.shutdown();
+    }
+
+    // 키를 눌렀다 떼는 한 번의 입력 (누르고 있는 동안의 중복 입력은 무시되므로 release까지 전달)
+    private void press(int keyCode) {
+        controller.keyPressed(new KeyEvent(source, KeyEvent.KEY_PRESSED,
+                System.currentTimeMillis(), 0, keyCode, KeyEvent.CHAR_UNDEFINED));
+        controller.keyReleased(new KeyEvent(source, KeyEvent.KEY_RELEASED,
+                System.currentTimeMillis(), 0, keyCode, KeyEvent.CHAR_UNDEFINED));
+    }
+
+    @Test // FR-19: ESC로 설정을 여는 동안 일시정지, 닫으면 게임 재개
+    void escPausesWhileSettingsOpenAndResumesAfter() {
+        press(KeyEvent.VK_ESCAPE);
+
+        assertEquals(1, settingsOpened);
+        assertTrue(pausedWhileSettingsOpen);
+        assertEquals(AppState.SETTINGS, stateWhileSettingsOpen);
+        assertFalse(loop.isPaused());
+        assertEquals(AppState.PLAYING, appState.getCurrentState());
+    }
+
+    @Test // 설정 중 shutdown되면 게임을 재개하지 않음
+    void doesNotResumeWhenShutdownDuringSettings() {
+        GameController[] holder = new GameController[1];
+        holder[0] = new GameController(loop, action, manager, scoreManager, appState,
+                () -> holder[0].shutdown(), () -> { }, () -> { });
+        holder[0].keyPressed(new KeyEvent(source, KeyEvent.KEY_PRESSED,
+                System.currentTimeMillis(), 0, KeyEvent.VK_ESCAPE, KeyEvent.CHAR_UNDEFINED));
+        holder[0].keyReleased(new KeyEvent(source, KeyEvent.KEY_RELEASED,
+                System.currentTimeMillis(), 0, KeyEvent.VK_ESCAPE, KeyEvent.CHAR_UNDEFINED));
+
+        assertTrue(loop.isPaused());
+        assertEquals(AppState.SETTINGS, appState.getCurrentState());
+    }
+
+    @Test // FR-19: P로 멈춘 상태에서 설정을 열고 닫으면 일시정지 유지
+    void escWhilePausedKeepsPausedAfterSettings() {
+        press(KeyEvent.VK_P);
+        press(KeyEvent.VK_ESCAPE);
+
+        assertEquals(1, settingsOpened);
+        assertTrue(loop.isPaused());
+        assertEquals(AppState.PAUSED, appState.getCurrentState());
+    }
+
+    @Test // P로 일시정지 화면 표시, 다시 P로 재개
+    void pTogglesPause() {
+        press(KeyEvent.VK_P);
+        assertTrue(loop.isPaused());
+        assertEquals(AppState.PAUSED, appState.getCurrentState());
+        assertEquals(1, pauseHandlerCalls);
+
+        press(KeyEvent.VK_P);
+        assertFalse(loop.isPaused());
+        assertEquals(AppState.PLAYING, appState.getCurrentState());
+        // 2번 호출되는지
+        assertEquals(2, pauseHandlerCalls);
+    }
+
+    @Test // 일시정지 중에는 이동 키 무시
+    void movementIgnoredWhilePaused() {
+        int startX = action.getCurrentBlock().getX();
+        press(KeyEvent.VK_P);
+
+        press(AppSettings.getInstance().getKey(KeyAction.MOVE_LEFT));
+
+        assertEquals(startX, action.getCurrentBlock().getX());
+    }
+
+    @Test
+    void movementKeyTakesEffectImmediatelyWithinTheInputResponseBudget() {
+        int initialX = action.getCurrentBlock().getX();
+
+        assertTimeoutPreemptively(Duration.ofMillis(250), () -> controller.keyPressed(
+                new KeyEvent(source, KeyEvent.KEY_PRESSED, System.currentTimeMillis(),
+                        0, KeyEvent.VK_LEFT, KeyEvent.CHAR_UNDEFINED)));
+
+        assertEquals(initialX - 1, action.getCurrentBlock().getX());
+    }
+
+    @Test
+    void hardDropKeyAddsPointsForTheActualDropDistance() {
+        Block falling = action.getCurrentBlock();
+        controller.keyPressed(new KeyEvent(source, KeyEvent.KEY_PRESSED,
+                System.currentTimeMillis(), 0, KeyEvent.VK_SPACE, KeyEvent.CHAR_UNDEFINED));
+
+        assertNotSame(falling, action.getCurrentBlock());
+        assertTrue(scoreManager.getScore() > 0);
+    }
+
+    @Test // FR-13: 게임 오버 후에는 ESC, P 무시
+    void escAndPIgnoredAfterGameOver() {
+        manager.setGameOver(true);
+
+        press(KeyEvent.VK_ESCAPE);
+        press(KeyEvent.VK_P);
+
+        assertEquals(0, settingsOpened);
+        assertEquals(0, pauseHandlerCalls);
+        assertFalse(loop.isPaused());
+    }
+
+    @Test
+    void holdingEscapeExitsInsteadOfOpeningSettings() throws InterruptedException {
+        controller.keyPressed(new KeyEvent(source, KeyEvent.KEY_PRESSED,
+                System.currentTimeMillis(), 0, KeyEvent.VK_ESCAPE, KeyEvent.CHAR_UNDEFINED));
+        assertTrue(exitCalled.await(GameController.ESCAPE_HOLD_THRESHOLD_MS + 1000L,
+                TimeUnit.MILLISECONDS));
+        controller.keyReleased(new KeyEvent(source, KeyEvent.KEY_RELEASED,
+                System.currentTimeMillis(), 0, KeyEvent.VK_ESCAPE, KeyEvent.CHAR_UNDEFINED));
+
+        assertEquals(1, exitHandlerCalls);
+        assertEquals(0, settingsOpened);
+    }
+}
