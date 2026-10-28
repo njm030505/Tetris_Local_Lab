@@ -1,9 +1,32 @@
+# Generated build output and caches
 /.gradle/
 /build/
 /bin/
 /out/
 *.class
 
+# IDE settings: import build.gradle on each computer
+/.idea/
+*.iml
 /.vscode/
 
-/lib/
+# Temporary analysis/downloads and Python caches
+/tmp/
+/temp/
+__pycache__/
+*.py[cod]
+
+# Local player settings, scores and recent server IPs
+/data/
+/src/main/java/menu/settings/settings.properties
+/src/main/java/storage/scores.txt
+
+# OS files and JVM crash dumps
+.DS_Store
+Thumbs.db
+Desktop.ini
+hs_err_pid*.log
+replay_pid*.log
+
+# tools/lib/*.jar and gradle/wrapper/gradle-wrapper.jar are required inputs.
+# Do not ignore all JAR files.
